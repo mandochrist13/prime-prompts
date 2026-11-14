@@ -28,7 +28,7 @@ Ce dossier transforme **un texte de publication + quelques photos** en vidéo ve
 
    Claude écrit le storyboard, génère les voix, vérifie qu'elles n'ont rien inventé, monte la vidéo et vous l'envoie.
 
-Variantes que vous pouvez demander : « avec ma voix (fichier voix.m4a) », « seulement la voix féminine », « plus court (45 s max) », « sans accent », etc.
+Variantes que vous pouvez demander : « sans voix » (musique + textes seulement), « avec ma voix (fichier voix.m4a) », « seulement la voix féminine », « plus court (45 s max) », « sans accent », etc.
 
 ### Enregistrer votre voix
 Smartphone à ~20 cm, pièce calme, lisez le texte d'une traite, naturellement (les respirations sont bienvenues). En cas d'erreur, marquez une pause et reprenez la phrase. N'importe quel format audio convient.

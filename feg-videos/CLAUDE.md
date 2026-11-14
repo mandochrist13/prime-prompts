@@ -27,6 +27,7 @@ pip install -r requirements.txt     # kokoro-onnx, librosa, soundfile, pillow, n
    python3 engine/make_video.py videos/<dossier> --voix Achird --tag masculine      # voix masculine validée
    python3 engine/make_video.py videos/<dossier> --voix Sulafat --tag feminine      # voix féminine validée
    python3 engine/make_video.py videos/<dossier> --enregistrement videos/<dossier>/voix.m4a --tag ma-voix
+   python3 engine/make_video.py videos/<dossier> --sans-voix --tag sans-voix           # musique seule, textes au rythme de lecture
    ```
    Par défaut : modèle `gemini-3.8-flash-tts`, accent gabonais (`--accent gabon`). Si quota épuisé (429), essayer `--modele gemini-3.8-flash-lite-tts` puis `gemini-3.1-flash-tts-preview`. `gemini-2.5-pro-preview-tts` n'a pas de quota gratuit.
 5. **Contrôle obligatoire** : le script imprime une transcription (`build/transcription_<tag>.txt`). La comparer au texte : les modèles TTS **inventent parfois une phrase** (déjà vu : « Et surtout, n'oubliez pas de vous abonner ! » au milieu). Si c'est le cas :

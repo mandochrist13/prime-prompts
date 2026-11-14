@@ -9,6 +9,8 @@ Exemples :
   python3 engine/make_video.py videos/... --enregistrement videos/.../voix.m4a --tag ma-voix
   # réutiliser une narration déjà générée (sans nouvel appel Gemini)
   python3 engine/make_video.py videos/... --narration videos/.../build/narration_masculine.wav --tag masculine
+  # version sans voix (musique + textes, rythme de lecture)
+  python3 engine/make_video.py videos/... --sans-voix --tag sans-voix
   # aperçu (planche d'images) seulement
   python3 engine/make_video.py videos/... --narration ... --tag masculine --apercu
 """
@@ -28,6 +30,7 @@ def main():
     ap.add_argument("--accent", default="gabon", choices=list(voice.ACCENTS))
     ap.add_argument("--enregistrement", help="fichier audio de votre propre voix")
     ap.add_argument("--narration", help="narration déjà prête (wav), pas de génération")
+    ap.add_argument("--sans-voix", action="store_true", help="pas de voix off : musique seule, textes au rythme de lecture")
     ap.add_argument("--sans-controle", action="store_true", help="ne pas transcrire la narration pour contrôle")
     ap.add_argument("--apercu", action="store_true", help="planche d'aperçu seulement, pas de vidéo")
     a = ap.parse_args()
@@ -37,7 +40,9 @@ def main():
     narr = os.path.join(build, f"narration_{a.tag}.wav")
 
     # 1. narration
-    if a.narration:
+    if a.sans_voix:
+        pass
+    elif a.narration:
         narr = os.path.abspath(a.narration)
     elif a.enregistrement:
         voice.import_recording(a.enregistrement, narr)
@@ -46,7 +51,7 @@ def main():
         voice.gemini_tts(story, narr, voice=a.voix, model=a.modele, accent=a.accent)
 
     # 2. contrôle : transcription (le modèle n'a-t-il rien inventé ni sauté ?)
-    if not a.sans_controle and not a.narration:
+    if not a.sans_controle and not a.narration and not a.sans_voix:
         print("[2/5] Transcription de contrôle ...", file=sys.stderr)
         try:
             tr = voice.transcribe(narr)
@@ -66,7 +71,21 @@ def main():
     if not ref or any(ref.get(k, {}).get("text") != t for k, t in texts.items()) or set(ref) != set(texts):
         ref = voice.kokoro_reference(story, refdir)
     alj = os.path.join(build, f"align_{a.tag}.json")
-    print(aligner.align(story, narr, ref, alj))
+    if a.sans_voix:
+        # Pas de voix : on pose la voix de référence (muette dans le mix) au rythme de lecture,
+        # elle sert seulement de guide pour caler les textes et les icônes de fin.
+        SRg = 24000; pos = 0.0; parts = []; pieces_t = {}
+        for key, text in storylib.pieces(story):
+            x, sr = sf.read(ref[key]["file"])
+            x = np.interp(np.arange(0, len(x), sr / SRg), np.arange(len(x)), x)
+            d = len(x) / SRg
+            slot = max(d * 1.08, len(text.split()) * 0.3) + 0.22
+            pieces_t[key] = [pos, pos + d]
+            parts += [x, np.zeros(int(slot * SRg) - len(x))]; pos += slot
+        guide = os.path.join(build, f"guide_{a.tag}.wav"); sf.write(guide, np.concatenate(parts), SRg)
+        json.dump({"full": guide, "len": pos, "pieces": pieces_t, "muet": True}, open(alj, "w"), indent=1)
+    else:
+        print(aligner.align(story, narr, ref, alj))
 
     # 4. rendu image
     print("[4/5] Rendu ...", file=sys.stderr)
@@ -84,14 +103,17 @@ def main():
         s = s if s.ndim == 1 else s.mean(1)
         x = np.interp(np.arange(0, len(s), sr / SR), np.arange(len(s)), s)
         i = int(start * SR); n = min(len(x), len(vo) - i); vo[i:i + n] += x[:n]
-    vo = vo / np.max(np.abs(vo)) * 0.9
+    if a.sans_voix:
+        vo[:] = 0
+    else:
+        vo = vo / np.max(np.abs(vo)) * 0.9
     vw, mw = os.path.join(build, f"voix_{a.tag}.wav"), os.path.join(build, f"musique_{a.tag}.wav")
     sf.write(vw, vo, SR)
     subprocess.run([sys.executable, os.path.join(ENGINE, "music.py"), str(t["total"]), json.dumps(t["cuts"]), mw, "cold"], check=True)
     outdir = os.path.join(vdir, "sortie"); os.makedirs(outdir, exist_ok=True)
     out = os.path.join(outdir, f"{os.path.basename(vdir)}_{a.tag}.mp4")
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", os.path.join(build, f"video_{a.tag}_noaudio.mp4"), "-i", vw, "-i", mw,
-                    "-filter_complex", "[2:a]volume=0.26[m];[1:a]aformat=channel_layouts=stereo,highpass=f=70,"
+                    "-filter_complex", ("[2:a]volume=0.9[m];" if a.sans_voix else "[2:a]volume=0.26[m];") + "[1:a]aformat=channel_layouts=stereo,highpass=f=70,"
                     "acompressor=threshold=0.1:ratio=2.5:attack=5:release=80,volume=1.5[v];"
                     "[m][v]amix=inputs=2:normalize=0,loudnorm=I=-15:TP=-1.5:LRA=11[a]",
                     "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-ar", "44100", "-c:a", "aac", "-b:a", "192k",
