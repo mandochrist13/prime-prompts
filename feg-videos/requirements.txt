@@ -1,0 +1,5 @@
+numpy
+pillow
+soundfile
+librosa
+kokoro-onnx
